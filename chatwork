@@ -1,0 +1,162 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Chatwork API",
+    "description": "OpenAPI specification for Chatwork API endpoints",
+    "version": "v1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.chatwork.com/v2"
+    }
+  ],
+  "paths": {
+    "/me": {
+      "get": {
+        "summary": "Get User Information",
+        "description": "Retrieve information about the authenticated user.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{room_id}/members": {
+      "get": {
+        "summary": "Get Room Members",
+        "description": "Retrieve a list of members in a specified room.",
+        "parameters": [
+          {
+            "name": "room_id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the room.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomMembers"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{room_id}/messages": {
+      "post": {
+        "summary": "Post a Message to Room",
+        "description": "Send a message to a specified room.",
+        "parameters": [
+          {
+            "name": "room_id",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the room.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Message payload",
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostMessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UserInfo": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "integer",
+            "description": "The account ID of the user."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the user."
+          },
+          "avatar_image_url": {
+            "type": "string",
+            "description": "The URL of the user's avatar image."
+          }
+        }
+      },
+      "RoomMembers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "type": "integer",
+              "description": "The account ID of the member."
+            },
+            "role": {
+              "type": "string",
+              "description": "The role of the member in the room."
+            },
+            "name": {
+              "type": "string",
+              "description": "The name of the member."
+            }
+          }
+        }
+      },
+      "PostMessageRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "The message body to be sent."
+          }
+        },
+        "required": ["body"]
+      },
+      "PostMessageResponse": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "description": "The ID of the posted message."
+          }
+        }
+      }
+    }
+  }
+}
