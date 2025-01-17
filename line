@@ -1,0 +1,163 @@
+// LINE と Dify を連携する Google Apps Script コード
+
+// API キーをスクリプトプロパティから取得します。
+// 事前に「ファイル」>「プロジェクトのプロパティ」>「スクリプトのプロパティ」で以下のキーと値を設定してください。
+// LINE_CHANNEL_ACCESS_TOKEN: あなたの LINE チャネルアクセストークン
+// DIFY_API_KEY: あなたの Dify API キー
+
+var LINE_CHANNEL_ACCESS_TOKEN = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+var DIFY_API_KEY = PropertiesService.getScriptProperties().getProperty('DIFY_API_KEY');
+var DIFY_ENDPOINT = 'https://api.dify.ai/v1/chat-messages'; // Dify のエンドポイント URL
+
+function doPost(e) {
+  try {
+    // LINE からのリクエストボディを解析
+    var events = JSON.parse(e.postData.contents).events;
+
+    // 各イベントを処理
+    events.forEach(function(event) {
+      // メッセージイベントのみ処理
+      if (event.type === 'message' && event.message.type === 'text') {
+        var userMessage = event.message.text;
+        var replyToken = event.replyToken;
+        var userId = event.source.userId;
+
+        // ユーザーごとの conversation_id を取得
+        var conversationId = getConversationId(userId);
+
+        // Dify API にリクエストを送信
+        var difyResponse = callDifyAPI(userMessage, conversationId);
+
+        // Dify からの応答と新しい conversation_id を取得
+        var replyMessage = difyResponse.reply || '申し訳ありませんが、ただいま対応できません。';
+        var newConversationId = difyResponse.conversationId;
+
+        // 新しい conversation_id を保存
+        if (newConversationId) {
+          setConversationId(userId, newConversationId);
+        }
+
+        // LINE に返信メッセージを送信
+        replyToLine(replyToken, replyMessage);
+      }
+    });
+  } catch (error) {
+    Logger.log('Exception: ' + error);
+  }
+
+  // LINE にはステータスコード 200 を返す
+  return ContentService.createTextOutput('OK');
+}
+
+function callDifyAPI(userMessage, conversationId) {
+  // Dify API へのリクエストボディを作成
+  var payload = {
+    "inputs": {},
+    "query": userMessage,
+    "response_mode": "blocking",
+    "user": "line-user"
+  };
+
+  // conversation_id がある場合は追加
+  if (conversationId) {
+    payload.conversation_id = conversationId;
+  }
+
+  var options = {
+    'method': 'post',
+    'contentType': 'application/json',
+    'headers': {
+      'Authorization': 'Bearer ' + DIFY_API_KEY
+    },
+    'payload': JSON.stringify(payload),
+    'muteHttpExceptions': true
+  };
+
+  try {
+    Logger.log('Sending request to Dify API...');
+    Logger.log('Request payload: ' + JSON.stringify(payload));
+    var response = UrlFetchApp.fetch(DIFY_ENDPOINT, options);
+    var statusCode = response.getResponseCode();
+    var content = response.getContentText();
+    Logger.log('Received response from Dify API.');
+    Logger.log('Status Code: ' + statusCode);
+    Logger.log('Response Content: ' + content);
+
+    if (statusCode >= 200 && statusCode < 300) {
+      var json = JSON.parse(content);
+
+      var reply = '';
+      var newConversationId = '';
+
+      // Dify のレスポンスから応答と conversation_id を取得
+      if (json.answer) {
+        reply = json.answer;
+      } else if (json.choices && json.choices.length > 0) {
+        reply = json.choices[0].message.content;
+      } else {
+        Logger.log('Dify API response does not contain expected fields.');
+        reply = '申し訳ありませんが、ただいま対応できません。';
+      }
+
+      // 新しい conversation_id を取得
+      if (json.conversation_id) {
+        newConversationId = json.conversation_id;
+      }
+
+      return {
+        reply: reply,
+        conversationId: newConversationId
+      };
+    } else {
+      Logger.log('Dify API Error: ' + statusCode + ' - ' + content);
+      return {
+        reply: '申し訳ありませんが、ただいま対応できません。'
+      };
+    }
+  } catch (error) {
+    Logger.log('Exception in callDifyAPI: ' + error);
+    return {
+      reply: '申し訳ありませんが、ただいま対応できません。'
+    };
+  }
+}
+
+// ユーザーごとの conversation_id を取得
+function getConversationId(userId) {
+  var userProperties = PropertiesService.getUserProperties();
+  return userProperties.getProperty('conversationId_' + userId);
+}
+
+// ユーザーごとの conversation_id を保存
+function setConversationId(userId, conversationId) {
+  var userProperties = PropertiesService.getUserProperties();
+  userProperties.setProperty('conversationId_' + userId, conversationId);
+}
+
+function replyToLine(replyToken, message) {
+  var url = 'https://api.line.me/v2/bot/message/reply';
+
+  var payload = {
+    'replyToken': replyToken,
+    'messages': [{
+      'type': 'text',
+      'text': message
+    }]
+  };
+
+  var options = {
+    'method': 'post',
+    'headers': {
+      'Content-Type': 'application/json; charset=UTF-8',
+      'Authorization': 'Bearer ' + LINE_CHANNEL_ACCESS_TOKEN,
+    },
+    'payload': JSON.stringify(payload)
+  };
+
+  try {
+    var response = UrlFetchApp.fetch(url, options);
+    Logger.log('Reply sent to LINE: ' + response.getContentText());
+  } catch (error) {
+    Logger.log('Exception in replyToLine: ' + error);
+  }
+}
